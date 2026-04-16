@@ -1,46 +1,54 @@
 #include <iostream>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
+#include <string.h>
 
-class WittyPiEngine {
-    int file;
-    const int addr = 0x08;
+class BlackBoxEngine {
+    int i2c_file;
+    const int WITTY_ADDR = 0x08;
+    const char* SOCKET_PATH = "/tmp/blackbox.sock";
 
 public:
-    WittyPiEngine() {
-        file = open("/dev/i2c-1", O_RDWR);
-        ioctl(file, I2C_SLAVE, addr);
+    BlackBoxEngine() {
+        i2c_file = open("/dev/i2c-1", O_RDWR);
+        ioctl(i2c_file, I2C_SLAVE, WITTY_ADDR);
     }
 
-    float getInVoltage() {
-        // Registers 1 (int) and 2 (dec) for Vin
-        unsigned char reg1 = 1, reg2 = 2;
+    float getVin() {
         unsigned char v_int, v_dec;
-        
-        write(file, &reg1, 1);
-        read(file, &v_int, 1);
-        write(file, &reg2, 1);
-        read(file, &v_dec, 1);
-
-        return (float)v_int + (float)v_dec / 100.0f;
+        unsigned char r1 = 1, r2 = 2;
+        write(i2c_file, &r1, 1); read(i2c_file, &v_int, 1);
+        write(i2c_file, &r2, 1); read(i2c_file, &v_dec, 1);
+        return (float)v_int + (v_dec / 100.0f);
     }
 
-    ~WittyPiEngine() { close(file); }
+    void sendToUI(std::string msg) {
+        int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        struct sockaddr_un addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path)-1);
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            send(sock, msg.c_str(), msg.length(), 0);
+        }
+        close(sock);
+    }
+
+    ~BlackBoxEngine() { close(i2c_file); }
 };
 
 int main() {
-    WittyPiEngine wp;
+    BlackBoxEngine engine;
     while(true) {
-        float voltage = wp.getInVoltage();
-        std::cout << "Equinox Battery: " << voltage << "V" << std::endl;
-        
-        // Logic: If voltage < 13.0, car is likely off.
-        if (voltage < 13.0) {
-            std::cout << "CRITICAL: Ignition Off. Signaling UI..." << std::endl;
-        }
-        sleep(2);
+        float voltage = engine.getVin();
+        // Format: "VOLT:13.8"
+        engine.sendToUI("VOLT:" + std::to_string(voltage));
+        usleep(500000); // Update twice per second
     }
     return 0;
 }
