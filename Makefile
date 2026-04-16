@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall -O2
+CXXFLAGS = -Wall -O2 -pthread
 SRC = firmware/witty_manager.cpp
 TARGET = bin/witty_manager
 
@@ -9,7 +9,7 @@ all:
 
 clean:
 	rm -rf bin
-	rm -f /tmp/blackbox.sock
+	rm -f /tmp/bb_tx.sock /tmp/bb_rx.sock
 
 run: all
 	sudo ./$(TARGET)
