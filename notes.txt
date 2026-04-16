@@ -1,0 +1,5 @@
+Install Dependencies: Run sudo apt install libi2c-dev python3-pyside6 on your
+ Pi.
+
+Test the Witty Pi: Can you run the i2cdetect -y 1 command? 
+You should see 08 in the grid.
